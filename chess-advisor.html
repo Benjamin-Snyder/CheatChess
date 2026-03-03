@@ -1,0 +1,1825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess Advisor — Smart Board Controller</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Playfair+Display:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --panel: #111318;
+    --border: #1e2530;
+    --accent: #00e5a0;
+    --accent2: #0088ff;
+    --warn: #ffaa00;
+    --danger: #ff4455;
+    --light-sq: #d4b896;
+    --dark-sq: #8b5e3c;
+    --highlight-from: rgba(0, 229, 160, 0.55);
+    --highlight-to: rgba(0, 136, 255, 0.55);
+    --highlight-last: rgba(255, 220, 0, 0.3);
+    --text: #c8d0dc;
+    --text-dim: #5a6478;
+    --mono: 'Share Tech Mono', monospace;
+    --serif: 'Playfair Display', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  header h1 {
+    font-family: var(--serif);
+    font-size: 2rem;
+    color: #fff;
+    letter-spacing: 0.05em;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .main-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* ── BOARD ── */
+  .board-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .board-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .rank-label, .file-label {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .file-labels {
+    display: flex;
+    margin-left: 18px;
+  }
+
+  .file-label { width: 64px; }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(8, 64px);
+    grid-template-rows: repeat(8, 64px);
+    border: 2px solid var(--border);
+    box-shadow: 0 0 40px rgba(0,0,0,0.6), 0 0 80px rgba(0,229,160,0.04);
+  }
+
+  .sq {
+    width: 64px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 38px;
+    cursor: pointer;
+    position: relative;
+    transition: filter 0.15s;
+    user-select: none;
+  }
+
+  .sq.light { background: var(--light-sq); }
+  .sq.dark  { background: var(--dark-sq); }
+
+  .sq.hl-from {
+    background: var(--highlight-from) !important;
+    box-shadow: inset 0 0 0 3px var(--accent), 0 0 18px var(--accent);
+    animation: pulse-from 1.2s ease-in-out infinite;
+  }
+
+  .sq.hl-to {
+    background: var(--highlight-to) !important;
+    box-shadow: inset 0 0 0 3px var(--accent2), 0 0 18px var(--accent2);
+    animation: pulse-to 1.2s ease-in-out infinite;
+  }
+
+  .sq.hl-last {
+    background: var(--highlight-last) !important;
+  }
+
+  .sq:hover { filter: brightness(1.15); }
+
+  @keyframes pulse-from {
+    0%,100% { box-shadow: inset 0 0 0 3px var(--accent), 0 0 12px var(--accent); }
+    50% { box-shadow: inset 0 0 0 3px var(--accent), 0 0 28px var(--accent); }
+  }
+  @keyframes pulse-to {
+    0%,100% { box-shadow: inset 0 0 0 3px var(--accent2), 0 0 12px var(--accent2); }
+    50% { box-shadow: inset 0 0 0 3px var(--accent2), 0 0 28px var(--accent2); }
+  }
+
+  .sq .piece-label {
+    font-size: 10px;
+    position: absolute;
+    bottom: 2px; right: 3px;
+    color: rgba(0,0,0,0.4);
+    font-family: var(--mono);
+    pointer-events: none;
+  }
+
+  /* ── SIDE PANEL ── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 280px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  /* Status */
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.green  { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .dot.blue   { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .dot.orange { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+  .dot.red    { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+  .dot.grey   { background: #444; }
+
+  .status-text { font-size: 0.78rem; }
+
+  /* Best move display */
+  .best-move-display {
+    text-align: center;
+    padding: 12px 0;
+  }
+
+  .move-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .sq-badge {
+    width: 48px; height: 48px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    line-height: 1;
+    gap: 2px;
+  }
+
+  .sq-badge small {
+    font-size: 0.6rem;
+    opacity: 0.7;
+    font-family: var(--mono);
+  }
+
+  .sq-badge.from { background: rgba(0,229,160,0.15); border: 1px solid var(--accent); }
+  .sq-badge.to   { background: rgba(0,136,255,0.15); border: 1px solid var(--accent2); }
+
+  .arrow-svg { color: var(--text-dim); }
+
+  .eval-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .eval-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.5s ease;
+  }
+
+  .eval-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Moves log */
+  .moves-log {
+    max-height: 160px;
+    overflow-y: auto;
+    font-size: 0.75rem;
+    line-height: 1.8;
+    color: var(--text-dim);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .moves-log .move-pair {
+    display: flex;
+    gap: 6px;
+  }
+
+  .moves-log .move-num { color: var(--text-dim); width: 20px; }
+  .moves-log .move-w   { color: var(--text); width: 56px; }
+  .moves-log .move-b   { color: var(--text-dim); width: 56px; }
+
+  /* Serial */
+  .serial-btn {
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .serial-btn:hover { background: rgba(0,229,160,0.08); }
+  .serial-btn:disabled { opacity: 0.4; cursor: default; border-color: var(--text-dim); color: var(--text-dim); }
+
+  .serial-log {
+    margin-top: 10px;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    max-height: 80px;
+    overflow-y: auto;
+    line-height: 1.6;
+    scrollbar-width: thin;
+  }
+
+  /* Stockfish */
+  .sf-path-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .sf-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    padding: 6px 8px;
+    border-radius: 4px;
+  }
+
+  .sf-input:focus { outline: none; border-color: var(--accent); }
+
+  .sf-btn {
+    padding: 6px 10px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  /* Controls */
+  .ctrl-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .ctrl-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .ctrl-btn.primary { border-color: var(--accent2); color: var(--accent2); }
+  .ctrl-btn.danger  { border-color: var(--danger); color: var(--danger); }
+
+  /* Turn indicator */
+  .turn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+  }
+
+  .turn-piece {
+    font-size: 1.4rem;
+  }
+
+  /* Thinking indicator */
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: var(--warn);
+  }
+
+  .thinking-dots span {
+    animation: blink 1.2s infinite;
+    opacity: 0;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.4s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.8s; }
+
+  @keyframes blink {
+    0%,100% { opacity: 0; }
+    50% { opacity: 1; }
+  }
+
+  /* Info section */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    font-size: 0.72rem;
+  }
+
+  .info-item label {
+    display: block;
+    color: var(--text-dim);
+    font-size: 0.6rem;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .info-item span {
+    color: var(--text);
+  }
+
+  /* Advise toggle */
+  .advise-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .advise-btn {
+    flex: 1;
+    padding: 6px 4px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .advise-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,229,160,0.08);
+  }
+
+  /* Piece colouring — use filled symbols for both sides, distinguish by CSS */
+  .piece-w {
+    color: #f5f5f5;
+    text-shadow:
+      0 0 3px #000, 0 0 3px #000,
+      1px 1px 0 #000, -1px 1px 0 #000,
+      1px -1px 0 #000, -1px -1px 0 #000;
+  }
+  .piece-b {
+    color: #1a1a1a;
+    text-shadow:
+      0 0 2px rgba(255,255,255,0.95),
+      1px 1px 0 rgba(255,255,255,0.8),
+      -1px 1px 0 rgba(255,255,255,0.8),
+      1px -1px 0 rgba(255,255,255,0.8),
+      -1px -1px 0 rgba(255,255,255,0.8);
+  }
+
+  /* Material display */
+  .mat-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 0.7rem;
+  }
+  .mat-label {
+    color: var(--text-dim);
+    font-size: 0.65rem;
+    min-width: 42px;
+    letter-spacing: 0.05em;
+  }
+  .mat-pieces { display: flex; flex-wrap: wrap; gap: 1px; flex: 1; line-height: 1; }
+  .mat-adv {
+    font-size: 0.72rem;
+    font-weight: bold;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* King-in-check highlight */
+  .sq.in-check {
+    background: rgba(255, 50, 50, 0.65) !important;
+    box-shadow: inset 0 0 0 3px var(--danger), 0 0 20px rgba(255, 68, 85, 0.5);
+    animation: pulse-check 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse-check {
+    0%,100% { box-shadow: inset 0 0 0 3px var(--danger), 0 0 10px rgba(255,68,85,0.4); }
+    50%      { box-shadow: inset 0 0 0 3px var(--danger), 0 0 26px rgba(255,68,85,0.9); }
+  }
+
+  /* End-game modal */
+  .end-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: em-fade 0.25s ease;
+  }
+
+  .end-modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 36px 44px;
+    text-align: center;
+    min-width: 280px;
+    box-shadow: 0 0 80px rgba(0,0,0,0.9), 0 0 40px rgba(0,229,160,0.06);
+    animation: em-scale 0.25s ease;
+  }
+
+  .end-modal-icon { font-size: 3.5rem; margin-bottom: 10px; }
+
+  .end-modal-title {
+    font-family: var(--serif);
+    font-size: 1.6rem;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+
+  .end-modal-sub {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-bottom: 26px;
+    line-height: 1.6;
+  }
+
+  .end-modal-btn {
+    padding: 10px 36px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: opacity 0.15s;
+  }
+  .end-modal-btn:hover { opacity: 0.82; }
+
+  @keyframes em-fade  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes em-scale { from { transform: scale(0.82); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* Selected square & legal move hints */
+  .sq.selected {
+    background: rgba(255, 230, 50, 0.55) !important;
+    box-shadow: inset 0 0 0 3px rgba(255, 220, 0, 0.9);
+  }
+
+  .sq.legal-dot::after {
+    content: '';
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.28);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .sq.legal-capture::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 5px rgba(0, 0, 0, 0.30);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .legend-color {
+    width: 12px; height: 12px;
+    border-radius: 2px;
+  }
+
+  footer {
+    margin-top: 24px;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>♟ Chess Advisor</h1>
+  <p>Smart Board Controller · Stockfish Engine · Arduino Serial Bridge</p>
+</header>
+
+<div class="main-layout">
+
+  <!-- BOARD -->
+  <div class="board-wrap">
+    <div class="file-labels" id="fileLabels"></div>
+    <div id="boardRows"></div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color" style="background:var(--highlight-from); border:1px solid var(--accent)"></div>
+        Pick up this piece
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background:var(--highlight-to); border:1px solid var(--accent2)"></div>
+        Place here
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background:var(--highlight-last); border:1px solid rgba(255,220,0,0.5)"></div>
+        Last move
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div class="side-panel">
+
+    <!-- Turn & Status -->
+    <div class="card">
+      <div class="card-title">Game Status</div>
+      <div class="status-row">
+        <div class="dot" id="engineDot" style="background:#444"></div>
+        <div class="status-text" id="engineStatus">Engine not loaded</div>
+      </div>
+      <div class="status-row">
+        <div class="dot" id="serialDot" style="background:#444"></div>
+        <div class="status-text" id="serialStatus">Serial: not connected</div>
+      </div>
+      <hr style="border-color:var(--border); margin: 10px 0">
+      <div class="turn-indicator">
+        <span class="turn-piece" id="turnPiece">♙</span>
+        <span id="turnText">White to move</span>
+        <div class="thinking" id="thinkingIndicator" style="display:none">
+          <span>Analyzing</span>
+          <div class="thinking-dots">
+            <span>.</span><span>.</span><span>.</span>
+          </div>
+        </div>
+      </div>
+      <hr style="border-color:var(--border); margin: 10px 0">
+      <div class="mat-line">
+        <span class="mat-label">♙ White</span>
+        <div class="mat-pieces" id="matWhiteCapt"></div>
+        <span class="mat-adv" id="matAdvW"></span>
+      </div>
+      <div class="mat-line">
+        <span class="mat-label">♟ Black</span>
+        <div class="mat-pieces" id="matBlackCapt"></div>
+        <span class="mat-adv" id="matAdvB"></span>
+      </div>
+    </div>
+
+    <!-- Best Move -->
+    <div class="card">
+      <div class="card-title">Stockfish Recommendation</div>
+      <div class="best-move-display" id="bestMoveDisplay">
+        <div style="color:var(--text-dim); font-size:0.75rem">Waiting for position...</div>
+      </div>
+    </div>
+
+    <!-- Stockfish Config -->
+    <div class="card">
+      <div class="card-title">Stockfish Engine</div>
+      <div class="advise-row">
+        <button class="advise-btn" data-side="w" onclick="setSFAdvise('w')">♙ White</button>
+        <button class="advise-btn active" data-side="both" onclick="setSFAdvise('both')">Both</button>
+        <button class="advise-btn" data-side="b" onclick="setSFAdvise('b')">♟ Black</button>
+      </div>
+      <div class="sf-path-row">
+        <input class="sf-input" id="sfDepth" type="number" value="15" min="1" max="30" style="width:60px; flex:none">
+        <label style="display:flex;align-items:center;font-size:0.7rem;color:var(--text-dim);gap:4px">depth</label>
+        <input class="sf-input" id="sfSkill" type="number" value="20" min="0" max="20" style="width:60px; flex:none">
+        <label style="display:flex;align-items:center;font-size:0.7rem;color:var(--text-dim);gap:4px">skill</label>
+      </div>
+      <div id="engineNote" style="font-size:0.65rem; color:var(--text-dim); line-height:1.5">
+        ℹ️ Uses Stockfish.js (WASM) embedded in browser. No install needed. For stronger analysis, run the native binary via the companion server script (see docs below).
+      </div>
+    </div>
+
+    <!-- Serial / Arduino -->
+    <div class="card">
+      <div class="card-title">Arduino Serial Bridge</div>
+      <button class="serial-btn" id="serialConnectBtn" onclick="connectSerial()">
+        ⚡ Connect to Arduino (Web Serial)
+      </button>
+      <div class="serial-log" id="serialLog">
+        <div>Waiting for connection...</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="card-title">Controls</div>
+      <div class="ctrl-row">
+        <button class="ctrl-btn primary" onclick="analyzePosition()">▶ Analyze</button>
+        <button class="ctrl-btn" onclick="undoMove()">↩ Undo</button>
+        <button class="ctrl-btn danger" onclick="resetBoard()">⟳ Reset</button>
+      </div>
+      <div class="ctrl-row" style="margin-top:8px">
+        <button class="ctrl-btn" onclick="copyFEN()">Copy FEN</button>
+        <button class="ctrl-btn" onclick="loadFEN()">Load FEN</button>
+      </div>
+    </div>
+
+    <!-- Move Log -->
+    <div class="card">
+      <div class="card-title">Move History</div>
+      <div class="moves-log" id="movesLog">
+        <div style="color:var(--text-dim)">No moves yet.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <div>📡 Arduino protocol: Serial 115200 baud · Board state as 64-char FEN piece string · LED commands as <code>LED:e2:e4</code></div>
+  <div>🔌 Piece ID: Reed switch (presence) + analog resistor ladder (piece type) per square</div>
+  <div>💡 LEDs: WS2812B 8×8 · Green = from square · Blue = to square</div>
+</footer>
+
+<script>
+// ════════════════════════════════════════════
+//  CHESS LOGIC (self-contained, no library)
+// ════════════════════════════════════════════
+
+const FILES = ['a','b','c','d','e','f','g','h'];
+const RANKS = ['8','7','6','5','4','3','2','1'];
+
+// Unicode pieces — all filled symbols; colour distinction done via CSS .piece-w / .piece-b
+const PIECES = {
+  'K':'♚','Q':'♛','R':'♜','B':'♝','N':'♞','P':'♟',
+  'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
+};
+
+// Initial FEN
+const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+let board = [];        // 8x8 array of piece chars or ''
+let turn = 'w';        // 'w' or 'b'
+let castling = 'KQkq';
+let enPassant = '-';
+let halfMove = 0;
+let fullMove = 1;
+let moveHistory = [];  // array of move strings e.g. 'e2e4'
+let lastMove = null;   // {from, to}
+let bestMove = null;   // {from, to, promo}
+let selectedSq = null;
+let legalTargets = []; // [[tr, tc, promo], ...]
+let sfAdvise = 'both'; // 'w' | 'b' | 'both'
+let serialPort = null;
+let serialWriter = null;
+let engine = null;
+let engineReady = false;
+let thinking = false;
+
+// ── FEN parsing ──
+
+function parseFEN(fen) {
+  const parts = fen.split(' ');
+  const rows = parts[0].split('/');
+  board = [];
+  for (let r = 0; r < 8; r++) {
+    const row = [];
+    for (const ch of rows[r]) {
+      if ('12345678'.includes(ch)) {
+        for (let i = 0; i < parseInt(ch); i++) row.push('');
+      } else {
+        row.push(ch);
+      }
+    }
+    board.push(row);
+  }
+  turn      = parts[1] || 'w';
+  castling  = parts[2] || '-';
+  enPassant = parts[3] || '-';
+  halfMove  = parseInt(parts[4]) || 0;
+  fullMove  = parseInt(parts[5]) || 1;
+}
+
+function buildFEN() {
+  let fenBoard = '';
+  for (let r = 0; r < 8; r++) {
+    let empty = 0;
+    for (let c = 0; c < 8; c++) {
+      if (board[r][c]) {
+        if (empty) { fenBoard += empty; empty = 0; }
+        fenBoard += board[r][c];
+      } else {
+        empty++;
+      }
+    }
+    if (empty) fenBoard += empty;
+    if (r < 7) fenBoard += '/';
+  }
+  return `${fenBoard} ${turn} ${castling} ${enPassant} ${halfMove} ${fullMove}`;
+}
+
+// ════════════════════════════════════════════
+//  LEGAL MOVE GENERATION
+// ════════════════════════════════════════════
+
+function isSquareAttackedBoard(b, tr, tc, byColor) {
+  const w = byColor === 'w';
+  // Pawns
+  const pDir = w ? 1 : -1; // white pawns sit below (higher row) the square they attack
+  const pawn = w ? 'P' : 'p';
+  for (const dc of [-1, 1]) {
+    const pr = tr + pDir, pc = tc + dc;
+    if (pr >= 0 && pr < 8 && pc >= 0 && pc < 8 && b[pr][pc] === pawn) return true;
+  }
+  // Knights
+  const knight = w ? 'N' : 'n';
+  for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+    const nr = tr+dr, nc = tc+dc;
+    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && b[nr][nc] === knight) return true;
+  }
+  // Bishop + Queen (diagonals)
+  const bishop = w ? 'B' : 'b', queen = w ? 'Q' : 'q';
+  for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+    let nr = tr+dr, nc = tc+dc;
+    while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+      const p = b[nr][nc];
+      if (p) { if (p === bishop || p === queen) return true; break; }
+      nr += dr; nc += dc;
+    }
+  }
+  // Rook + Queen (straights)
+  const rook = w ? 'R' : 'r';
+  for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    let nr = tr+dr, nc = tc+dc;
+    while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+      const p = b[nr][nc];
+      if (p) { if (p === rook || p === queen) return true; break; }
+      nr += dr; nc += dc;
+    }
+  }
+  // King
+  const king = w ? 'K' : 'k';
+  for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+    const nr = tr+dr, nc = tc+dc;
+    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && b[nr][nc] === king) return true;
+  }
+  return false;
+}
+
+function isInCheckBoard(b, side) {
+  const king = side === 'w' ? 'K' : 'k';
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++)
+      if (b[r][c] === king) return isSquareAttackedBoard(b, r, c, side === 'w' ? 'b' : 'w');
+  return true; // king missing
+}
+
+function getPseudoMoves(r, c) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const isWhite = piece === piece.toUpperCase();
+  const opp = isWhite ? 'b' : 'w';
+  const moves = []; // [[tr, tc, promo]]
+
+  const friendly = (nr, nc) => {
+    const p = board[nr][nc];
+    return p && (isWhite === (p === p.toUpperCase()));
+  };
+
+  const addMove = (tr, tc, promo = null) => {
+    if (tr < 0 || tr > 7 || tc < 0 || tc > 7) return;
+    if (friendly(tr, tc)) return;
+    moves.push([tr, tc, promo]);
+  };
+
+  const addSlide = (dr, dc) => {
+    let nr = r+dr, nc = c+dc;
+    while (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+      const p = board[nr][nc];
+      if (p) {
+        if (isWhite !== (p === p.toUpperCase())) moves.push([nr, nc, null]);
+        break;
+      }
+      moves.push([nr, nc, null]);
+      nr += dr; nc += dc;
+    }
+  };
+
+  const type = piece.toLowerCase();
+
+  if (type === 'p') {
+    const dir = isWhite ? -1 : 1;
+    const startR = isWhite ? 6 : 1;
+    const promoR = isWhite ? 0 : 7;
+
+    // Forward
+    if (r+dir >= 0 && r+dir <= 7 && !board[r+dir][c]) {
+      if (r+dir === promoR) {
+        for (const p of ['q','r','b','n']) moves.push([r+dir, c, p]);
+      } else {
+        moves.push([r+dir, c, null]);
+        if (r === startR && !board[r+2*dir][c]) moves.push([r+2*dir, c, null]);
+      }
+    }
+    // Captures + en passant
+    for (const dc of [-1, 1]) {
+      const nc = c+dc, nr = r+dir;
+      if (nc < 0 || nc > 7 || nr < 0 || nr > 7) continue;
+      const target = board[nr][nc];
+      if (target && (isWhite !== (target === target.toUpperCase()))) {
+        if (nr === promoR) {
+          for (const p of ['q','r','b','n']) moves.push([nr, nc, p]);
+        } else {
+          moves.push([nr, nc, null]);
+        }
+      }
+      if (enPassant !== '-') {
+        const [epR, epC] = sqToRC(enPassant);
+        if (nr === epR && nc === epC) moves.push([nr, nc, null]);
+      }
+    }
+  }
+
+  if (type === 'n') {
+    for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]])
+      addMove(r+dr, c+dc);
+  }
+  if (type === 'b') for (const d of [[-1,-1],[-1,1],[1,-1],[1,1]]) addSlide(...d);
+  if (type === 'r') for (const d of [[-1,0],[1,0],[0,-1],[0,1]]) addSlide(...d);
+  if (type === 'q') for (const d of [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]) addSlide(...d);
+
+  if (type === 'k') {
+    for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]])
+      addMove(r+dr, c+dc);
+    // Castling
+    if (isWhite && r === 7 && c === 4) {
+      if (castling.includes('K') && !board[7][5] && !board[7][6]
+          && !isSquareAttackedBoard(board,7,4,opp) && !isSquareAttackedBoard(board,7,5,opp) && !isSquareAttackedBoard(board,7,6,opp))
+        moves.push([7, 6, null]);
+      if (castling.includes('Q') && !board[7][3] && !board[7][2] && !board[7][1]
+          && !isSquareAttackedBoard(board,7,4,opp) && !isSquareAttackedBoard(board,7,3,opp) && !isSquareAttackedBoard(board,7,2,opp))
+        moves.push([7, 2, null]);
+    }
+    if (!isWhite && r === 0 && c === 4) {
+      if (castling.includes('k') && !board[0][5] && !board[0][6]
+          && !isSquareAttackedBoard(board,0,4,opp) && !isSquareAttackedBoard(board,0,5,opp) && !isSquareAttackedBoard(board,0,6,opp))
+        moves.push([0, 6, null]);
+      if (castling.includes('q') && !board[0][3] && !board[0][2] && !board[0][1]
+          && !isSquareAttackedBoard(board,0,4,opp) && !isSquareAttackedBoard(board,0,3,opp) && !isSquareAttackedBoard(board,0,2,opp))
+        moves.push([0, 2, null]);
+    }
+  }
+  return moves;
+}
+
+function getLegalMoves(r, c) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const isWhite = piece === piece.toUpperCase();
+  const side = isWhite ? 'w' : 'b';
+
+  return getPseudoMoves(r, c).filter(([tr, tc, promo]) => {
+    const b = board.map(row => [...row]);
+    const movePiece = promo ? (isWhite ? promo.toUpperCase() : promo.toLowerCase()) : piece;
+    // En passant: pawn moves diagonally to empty square → remove captured pawn on same rank
+    if (piece.toLowerCase() === 'p' && tc !== c && !b[tr][tc]) b[r][tc] = '';
+    // Castling: also move the rook
+    if (piece === 'K' && c === 4 && tc === 6) { b[7][7] = ''; b[7][5] = 'R'; }
+    if (piece === 'K' && c === 4 && tc === 2) { b[7][0] = ''; b[7][3] = 'R'; }
+    if (piece === 'k' && c === 4 && tc === 6) { b[0][7] = ''; b[0][5] = 'r'; }
+    if (piece === 'k' && c === 4 && tc === 2) { b[0][0] = ''; b[0][3] = 'r'; }
+    b[tr][tc] = movePiece;
+    b[r][c] = '';
+    return !isInCheckBoard(b, side);
+  });
+}
+
+function hasAnyLegalMoves(side) {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (!p) continue;
+      if ((side === 'w') !== (p === p.toUpperCase())) continue;
+      if (getLegalMoves(r, c).length > 0) return true;
+    }
+  }
+  return false;
+}
+
+function checkGameEnd() {
+  if (hasAnyLegalMoves(turn)) return;
+  const inCheck = isInCheckBoard(board, turn);
+  const loser  = turn === 'w' ? 'White' : 'Black';
+  const winner = turn === 'w' ? 'Black' : 'White';
+  if (inCheck) {
+    showEndModal('Checkmate!', turn === 'w' ? '♚' : '♔',
+      `${winner} wins the game.\nClick "New Game" to play again.`);
+  } else {
+    showEndModal('Stalemate', '½–½',
+      `${loser} has no legal moves.\nThe game is a draw.`);
+  }
+}
+
+function showEndModal(title, icon, sub) {
+  if (document.getElementById('endModal')) return; // already showing
+  const overlay = document.createElement('div');
+  overlay.className = 'end-modal-overlay';
+  overlay.id = 'endModal';
+  overlay.innerHTML = `
+    <div class="end-modal">
+      <div class="end-modal-icon">${icon}</div>
+      <div class="end-modal-title">${title}</div>
+      <div class="end-modal-sub">${(sub || '').replace(/\n/g, '<br>')}</div>
+      <button class="end-modal-btn" onclick="closeEndModal()">New Game</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function closeEndModal() {
+  const modal = document.getElementById('endModal');
+  if (modal) modal.remove();
+  resetBoard();
+}
+
+// ════════════════════════════════════════════
+//  MATERIAL
+// ════════════════════════════════════════════
+
+const PIECE_VALUES   = { P:1, N:3, B:3, R:5, Q:9 };
+const START_COUNTS   = { P:8, N:2, B:2, R:2, Q:1 };
+const CAPT_ORDER     = ['Q','R','B','N','P'];
+
+function computeMaterial() {
+  const onBoard = { w:{}, b:{} };
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (!p || p.toLowerCase() === 'k') continue;
+      if (p === p.toUpperCase()) onBoard.w[p]               = (onBoard.w[p]||0) + 1;
+      else                       onBoard.b[p.toUpperCase()] = (onBoard.b[p.toUpperCase()]||0) + 1;
+    }
+  }
+  let wScore = 0, bScore = 0;
+  const captByWhite = {}; // black pieces white captured
+  const captByBlack = {}; // white pieces black captured
+  for (const [p, start] of Object.entries(START_COUNTS)) {
+    const wOn = onBoard.w[p] || 0, bOn = onBoard.b[p] || 0;
+    wScore += wOn * PIECE_VALUES[p];
+    bScore += bOn * PIECE_VALUES[p];
+    const wMiss = start - wOn, bMiss = start - bOn;
+    if (wMiss > 0) captByBlack[p] = wMiss;
+    if (bMiss > 0) captByWhite[p] = bMiss;
+  }
+  return { captByWhite, captByBlack, wScore, bScore, diff: wScore - bScore };
+}
+
+function updateMaterialDisplay() {
+  const { captByWhite, captByBlack, diff } = computeMaterial();
+
+  const renderPieces = (captured, cssClass) => {
+    let html = '';
+    for (const p of CAPT_ORDER) {
+      const n = captured[p] || 0;
+      for (let i = 0; i < n; i++)
+        html += `<span class="${cssClass}" style="font-size:15px;line-height:1">${PIECES[p]}</span>`;
+    }
+    return html || '';
+  };
+
+  // White row: pieces white captured (black pieces, shown dark)
+  document.getElementById('matWhiteCapt').innerHTML = renderPieces(captByWhite, 'piece-b');
+  // Black row: pieces black captured (white pieces, shown light)
+  document.getElementById('matBlackCapt').innerHTML = renderPieces(captByBlack, 'piece-w');
+
+  const wAdv = document.getElementById('matAdvW');
+  const bAdv = document.getElementById('matAdvB');
+  if (diff > 0) {
+    wAdv.textContent = '+' + diff; wAdv.style.color = 'var(--accent)';
+    bAdv.textContent = '';
+  } else if (diff < 0) {
+    bAdv.textContent = '+' + (-diff); bAdv.style.color = 'var(--accent)';
+    wAdv.textContent = '';
+  } else {
+    wAdv.textContent = ''; bAdv.textContent = '';
+  }
+}
+
+// ── Coordinate helpers ──
+
+function sqToRC(sq) {
+  const c = FILES.indexOf(sq[0]);
+  const r = 8 - parseInt(sq[1]);
+  return [r, c];
+}
+
+function rcToSq(r, c) {
+  return FILES[c] + (8 - r);
+}
+
+// ── Apply move (UCI format: e2e4, e7e8q) ──
+
+function applyMove(uci) {
+  const from = uci.slice(0,2);
+  const to   = uci.slice(2,4);
+  const promo = uci[4] || null;
+  const [fr, fc] = sqToRC(from);
+  const [tr, tc] = sqToRC(to);
+
+  const piece = board[fr][fc];
+  if (!piece) return false;
+
+  // En passant capture
+  if (piece.toLowerCase() === 'p' && to === enPassant) {
+    const epR = fr; // same rank as pawn
+    board[epR][tc] = '';
+  }
+
+  // Castling
+  if (piece === 'K') {
+    if (from === 'e1' && to === 'g1') { board[7][7] = ''; board[7][5] = 'R'; }
+    if (from === 'e1' && to === 'c1') { board[7][0] = ''; board[7][3] = 'R'; }
+  }
+  if (piece === 'k') {
+    if (from === 'e8' && to === 'g8') { board[0][7] = ''; board[0][5] = 'r'; }
+    if (from === 'e8' && to === 'c8') { board[0][0] = ''; board[0][3] = 'r'; }
+  }
+
+  // Move piece
+  board[tr][tc] = promo ? (turn === 'w' ? promo.toUpperCase() : promo.toLowerCase()) : piece;
+  board[fr][fc] = '';
+
+  // Update castling rights
+  if (piece === 'K') castling = castling.replace('K','').replace('Q','');
+  if (piece === 'k') castling = castling.replace('k','').replace('q','');
+  if (from === 'a1' || to === 'a1') castling = castling.replace('Q','');
+  if (from === 'h1' || to === 'h1') castling = castling.replace('K','');
+  if (from === 'a8' || to === 'a8') castling = castling.replace('q','');
+  if (from === 'h8' || to === 'h8') castling = castling.replace('k','');
+  if (!castling) castling = '-';
+
+  // En passant
+  if (piece.toLowerCase() === 'p' && Math.abs(tr - fr) === 2) {
+    enPassant = rcToSq((fr + tr) / 2, fc);
+  } else {
+    enPassant = '-';
+  }
+
+  halfMove = (piece.toLowerCase() === 'p' || board[tr][tc]) ? 0 : halfMove + 1;
+  if (turn === 'b') fullMove++;
+
+  lastMove = { from, to };
+  turn = turn === 'w' ? 'b' : 'w';
+  moveHistory.push(uci);
+  return true;
+}
+
+// ════════════════════════════════════════════
+//  STOCKFISH (WASM via CDN)
+// ════════════════════════════════════════════
+
+// We'll use Stockfish.js from a CDN
+let stockfishWorker = null;
+let sfResolve = null;
+
+function loadStockfish() {
+  setEngineStatus('orange', 'Loading engine...');
+  // Browsers block new Worker(cross-origin-url). Work around it by wrapping
+  // with importScripts inside a same-origin blob URL.
+  const cdnUrl = 'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js';
+  const workerSrc = `importScripts('${cdnUrl}');`;
+  try {
+    const blob = new Blob([workerSrc], { type: 'application/javascript' });
+    stockfishWorker = new Worker(URL.createObjectURL(blob));
+    stockfishWorker.onmessage = e => handleEngineMessage(e.data);
+    stockfishWorker.onerror = () => loadStockfishFetch();
+    stockfishWorker.postMessage('uci');
+    // If no readyok within 6 s, fall back to fetch approach
+    setTimeout(() => { if (!engineReady) loadStockfishFetch(); }, 6000);
+  } catch(e) {
+    loadStockfishFetch();
+  }
+}
+
+async function loadStockfishFetch() {
+  if (engineReady) return;
+  if (stockfishWorker) { stockfishWorker.terminate(); stockfishWorker = null; }
+
+  const urls = [
+    'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js',
+  ];
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, { mode: 'cors' });
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      const blobUrl = URL.createObjectURL(new Blob([text], { type: 'application/javascript' }));
+      stockfishWorker = new Worker(blobUrl);
+      stockfishWorker.onmessage = e => handleEngineMessage(e.data);
+      stockfishWorker.onerror = () => { setEngineStatus('red', 'Engine failed'); useFallbackEngine(); };
+      stockfishWorker.postMessage('uci');
+      return;
+    } catch(e) { /* try next */ }
+  }
+  // All approaches failed
+  setEngineStatus('red', 'Engine unavailable');
+  document.getElementById('engineNote').innerHTML =
+    '⚠ Stockfish could not be loaded from CDN (common when opening via file://).<br>' +
+    '<b>Fix:</b> serve this file from a local HTTP server:<br>' +
+    '<code>python3 -m http.server 8080</code><br>' +
+    'Then open <code>http://localhost:8080/chess-advisor.html</code>';
+  useFallbackEngine();
+}
+
+let engineBuffer = [];
+
+function handleEngineMessage(msg) {
+  if (msg === 'uciok') {
+    stockfishWorker.postMessage('isready');
+  }
+  if (msg === 'readyok') {
+    engineReady = true;
+    setEngineStatus('green', 'Stockfish ready');
+    analyzePosition();
+  }
+  if (msg.startsWith('bestmove')) {
+    const parts = msg.split(' ');
+    const bm = parts[1];
+    if (bm && bm !== '(none)') {
+      displayBestMove(bm);
+      sendLEDCommand(bm);
+    }
+    thinking = false;
+    document.getElementById('thinkingIndicator').style.display = 'none';
+    if (sfResolve) { sfResolve(bm); sfResolve = null; }
+  }
+  if (msg.includes('score cp')) {
+    const m = msg.match(/score cp (-?\d+)/);
+    if (m) updateEval(parseInt(m[1]));
+  }
+  if (msg.includes('score mate')) {
+    const m = msg.match(/score mate (-?\d+)/);
+    if (m) updateEval(m[1] > 0 ? 9999 : -9999);
+  }
+}
+
+function setSFAdvise(side) {
+  sfAdvise = side;
+  document.querySelectorAll('.advise-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.side === side);
+  });
+  // Re-analyze for the new setting if it's now that side's turn
+  bestMove = null;
+  document.getElementById('bestMoveDisplay').innerHTML =
+    '<div style="color:var(--text-dim); font-size:0.75rem">Waiting for position...</div>';
+  renderBoard();
+  if (engineReady) setTimeout(analyzePosition, 100);
+}
+
+function analyzePosition() {
+  if (!engineReady || thinking) return;
+  // Respect the side toggle
+  if (sfAdvise !== 'both' && turn !== sfAdvise) {
+    const sideName = sfAdvise === 'w' ? 'White' : 'Black';
+    setEngineStatus('green', `Advising ${sideName} only`);
+    document.getElementById('bestMoveDisplay').innerHTML =
+      `<div style="color:var(--text-dim); font-size:0.75rem">Not advising ${turn === 'w' ? 'White' : 'Black'}</div>`;
+    return;
+  }
+  thinking = true;
+  document.getElementById('thinkingIndicator').style.display = 'flex';
+  setEngineStatus('green', 'Analyzing...');
+
+  const fen = buildFEN();
+  const depth = parseInt(document.getElementById('sfDepth').value) || 15;
+  const skill = parseInt(document.getElementById('sfSkill').value);
+
+  stockfishWorker.postMessage(`setoption name Skill Level value ${skill}`);
+  stockfishWorker.postMessage(`position fen ${fen}`);
+  stockfishWorker.postMessage(`go depth ${depth}`);
+}
+
+function setEngineStatus(color, text) {
+  const dot = document.getElementById('engineDot');
+  const stat = document.getElementById('engineStatus');
+  dot.className = 'dot ' + color;
+  stat.textContent = text;
+}
+
+// Fallback: simple random legal move generator (very dumb)
+function useFallbackEngine() {
+  engineReady = true;
+  setEngineStatus('orange', 'Fallback engine (random moves)');
+  engine = 'fallback';
+}
+
+function fallbackBestMove() {
+  // Just pick a random pawn push or piece move for white
+  const moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (!p || p !== p.toUpperCase()) continue; // skip empty & black
+      // Pawn
+      if (p === 'P' && r > 0 && !board[r-1][c]) {
+        moves.push(rcToSq(r,c) + rcToSq(r-1,c));
+      }
+      // Others: just add all non-friendly diagonals/adjacent (very rough)
+    }
+  }
+  return moves[Math.floor(Math.random() * moves.length)] || null;
+}
+
+// ════════════════════════════════════════════
+//  EVAL BAR
+// ════════════════════════════════════════════
+
+function updateEval(cp) {
+  // cp: centipawns from white's perspective
+  const clamped = Math.max(-1000, Math.min(1000, cp));
+  const pct = ((clamped + 1000) / 2000) * 100;
+  // We'll show it in the best move card if it exists
+  let evalBar = document.getElementById('evalBar');
+  let evalFill = document.getElementById('evalFill');
+  let evalVal = document.getElementById('evalVal');
+  if (evalFill) {
+    evalFill.style.width = pct + '%';
+    const pawns = (cp / 100).toFixed(2);
+    evalVal.textContent = (cp > 0 ? '+' : '') + pawns;
+  }
+}
+
+// ════════════════════════════════════════════
+//  BEST MOVE DISPLAY
+// ════════════════════════════════════════════
+
+const CASTLE_MAP = {
+  'e1g1': 'O-O',   'e1c1': 'O-O-O',
+  'e8g8': 'O-O',   'e8c8': 'O-O-O',
+};
+
+function displayBestMove(uci) {
+  bestMove = { from: uci.slice(0,2), to: uci.slice(2,4), promo: uci[4] || null };
+
+  const [fr, fc] = sqToRC(bestMove.from);
+  const piece = board[fr][fc];
+  const pieceUnicode = piece ? (PIECES[piece] || '') : '?';
+  const pieceColorClass = piece && piece === piece.toUpperCase() ? 'piece-w' : 'piece-b';
+  const castle = CASTLE_MAP[uci.slice(0,4)];
+
+  const display = document.getElementById('bestMoveDisplay');
+
+  if (castle) {
+    // Castle notation: show king + rook side-by-side with "O-O" label
+    const isKingside = castle === 'O-O';
+    const rookSq = uci[1] === '1'
+      ? (isKingside ? 'h1' : 'a1')
+      : (isKingside ? 'h8' : 'a8');
+    const [rr, rc] = sqToRC(rookSq);
+    const rookUnicode = PIECES[board[rr][rc]] || '♖';
+    display.innerHTML = `
+      <div style="text-align:center; font-size:1.4rem; letter-spacing:.1em; color:var(--accent); margin-bottom:6px">${castle}</div>
+      <div class="move-arrow">
+        <div class="sq-badge from">
+          <span class="${pieceColorClass}">${pieceUnicode}</span>
+          <small>${bestMove.from}</small>
+        </div>
+        <svg class="arrow-svg" width="22" height="24" viewBox="0 0 22 24">
+          <path d="M2 12 L16 12 M10 6 L16 12 L10 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+        <div class="sq-badge to" style="border-color:var(--warn)">
+          <span class="${pieceColorClass}">${rookUnicode}</span>
+          <small>${rookSq}</small>
+        </div>
+      </div>
+      <div style="font-size:0.65rem;color:var(--text-dim);margin-top:4px">${isKingside ? 'Kingside castling' : 'Queenside castling'}</div>
+      <div class="eval-bar"><div class="eval-fill" id="evalFill" style="width:50%"></div></div>
+      <div class="eval-label"><span>Black +</span><span id="evalVal">0.00</span><span>White +</span></div>
+    `;
+  } else {
+    display.innerHTML = `
+      <div class="move-arrow">
+        <div class="sq-badge from">
+          <span class="${pieceColorClass}">${pieceUnicode}</span>
+          <small>${bestMove.from}</small>
+        </div>
+        <svg class="arrow-svg" width="30" height="24" viewBox="0 0 30 24">
+          <path d="M2 12 L22 12 M16 6 L22 12 L16 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+        <div class="sq-badge to">
+          <span class="${pieceColorClass}">${bestMove.promo ? (PIECES[bestMove.promo.toUpperCase()]||'♛') : '◎'}</span>
+          <small>${bestMove.to}${bestMove.promo ? '='+bestMove.promo.toUpperCase() : ''}</small>
+        </div>
+      </div>
+      <div class="eval-bar"><div class="eval-fill" id="evalFill" style="width:50%"></div></div>
+      <div class="eval-label"><span>Black +</span><span id="evalVal">0.00</span><span>White +</span></div>
+    `;
+  }
+
+  renderBoard(); // refresh highlights
+}
+
+// ════════════════════════════════════════════
+//  BOARD RENDERING
+// ════════════════════════════════════════════
+
+function renderBoard() {
+  const container = document.getElementById('boardRows');
+  container.innerHTML = '';
+  const whiteInCheck = isInCheckBoard(board, 'w');
+  const blackInCheck = isInCheckBoard(board, 'b');
+
+  for (let r = 0; r < 8; r++) {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'board-row';
+
+    const rankLabel = document.createElement('div');
+    rankLabel.className = 'rank-label';
+    rankLabel.textContent = RANKS[r];
+    rowDiv.appendChild(rankLabel);
+
+    const boardSlice = document.createElement('div');
+    boardSlice.style.display = 'flex';
+
+    for (let c = 0; c < 8; c++) {
+      const sq = document.createElement('div');
+      sq.className = 'sq ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      sq.dataset.r = r;
+      sq.dataset.c = c;
+
+      const sqName = rcToSq(r, c);
+
+      // Selected square
+      if (selectedSq === sqName) sq.classList.add('selected');
+
+      // Legal move targets
+      const legalMatch = legalTargets.find(([tr, tc]) => tr === r && tc === c);
+      if (legalMatch) {
+        if (board[r][c]) sq.classList.add('legal-capture');
+        else sq.classList.add('legal-dot');
+      }
+      // If king is selected and castling is available, highlight the rook square too
+      if (selectedSq) {
+        const [sr, sc] = sqToRC(selectedSq);
+        const selPiece = board[sr][sc];
+        if (selPiece === 'K' || selPiece === 'k') {
+          const castleMap = { '7,6': [7,7], '7,2': [7,0], '0,6': [0,7], '0,2': [0,0] };
+          for (const [tr, tc] of legalTargets) {
+            const rookSq = castleMap[`${tr},${tc}`];
+            if (rookSq && rookSq[0] === r && rookSq[1] === c) {
+              sq.classList.add('legal-capture'); // rook = friendly, use capture ring style
+            }
+          }
+        }
+      }
+
+      // Stockfish recommendation highlights
+      if (bestMove) {
+        if (sqName === bestMove.from) sq.classList.add('hl-from');
+        if (sqName === bestMove.to)   sq.classList.add('hl-to');
+      }
+      if (lastMove) {
+        if (sqName === lastMove.from || sqName === lastMove.to) {
+          if (!sq.classList.contains('hl-from') && !sq.classList.contains('hl-to'))
+            sq.classList.add('hl-last');
+        }
+      }
+
+      const piece = board[r][c];
+      if (piece) {
+        if ((piece === 'K' && whiteInCheck) || (piece === 'k' && blackInCheck))
+          sq.classList.add('in-check');
+
+        const isWhitePiece = piece === piece.toUpperCase();
+        const pieceSpan = document.createElement('span');
+        pieceSpan.className = isWhitePiece ? 'piece-w' : 'piece-b';
+        pieceSpan.textContent = PIECES[piece] || piece;
+        sq.appendChild(pieceSpan);
+
+        const lbl = document.createElement('div');
+        lbl.className = 'piece-label';
+        lbl.textContent = piece;
+        sq.appendChild(lbl);
+      }
+
+      sq.onclick = () => handleSquareClick(r, c);
+      boardSlice.appendChild(sq);
+    }
+
+    rowDiv.appendChild(boardSlice);
+    container.appendChild(rowDiv);
+  }
+}
+
+function renderFileLabels() {
+  const container = document.getElementById('fileLabels');
+  container.innerHTML = '';
+  for (const f of FILES) {
+    const lbl = document.createElement('div');
+    lbl.className = 'file-label';
+    lbl.textContent = f;
+    container.appendChild(lbl);
+  }
+}
+
+// ════════════════════════════════════════════
+//  SQUARE CLICK (manual move input)
+// ════════════════════════════════════════════
+
+function handleSquareClick(r, c) {
+  const sqName = rcToSq(r, c);
+
+  if (selectedSq !== null) {
+    const [sr, sc] = sqToRC(selectedSq);
+
+    // Clicking the already-selected square → deselect
+    if (sr === r && sc === c) {
+      selectedSq = null; legalTargets = []; renderBoard(); return;
+    }
+
+    // Clicking a legal target → make the move
+    const match = legalTargets.find(([tr, tc]) => tr === r && tc === c);
+    if (match) {
+      const promo = match[2] || '';
+      const moveUCI = selectedSq + sqName + promo;
+      const success = applyMove(moveUCI);
+      selectedSq = null; legalTargets = [];
+      if (success) {
+        updateMoveLog();
+        updateTurnIndicator();
+        renderBoard();
+        bestMove = null;
+        checkGameEnd(); updateMaterialDisplay();
+        setTimeout(analyzePosition, 300);
+        sendBoardStateToArduino();
+      }
+      return;
+    }
+
+    // Special case: clicking own rook while king is selected → castle
+    {
+      const [sr, sc] = sqToRC(selectedSq);
+      const selPiece = board[sr][sc];
+      const clickedPiece = board[r][c];
+      if ((selPiece === 'K' || selPiece === 'k') && clickedPiece === (selPiece === 'K' ? 'R' : 'r')) {
+        // Map rook square to castling destination square
+        const castleMap = { '7,7': [7,6], '7,0': [7,2], '0,7': [0,6], '0,0': [0,2] };
+        const dest = castleMap[`${r},${c}`];
+        if (dest) {
+          const castleMatch = legalTargets.find(([tr, tc]) => tr === dest[0] && tc === dest[1]);
+          if (castleMatch) {
+            const moveUCI = selectedSq + rcToSq(dest[0], dest[1]);
+            const success = applyMove(moveUCI);
+            selectedSq = null; legalTargets = [];
+            if (success) {
+              updateMoveLog(); updateTurnIndicator(); renderBoard();
+              bestMove = null;
+              checkGameEnd(); updateMaterialDisplay();
+              setTimeout(analyzePosition, 300);
+              sendBoardStateToArduino();
+            }
+            return;
+          }
+        }
+      }
+    }
+
+    // Clicking a different friendly piece → switch selection
+    const p = board[r][c];
+    if (p && ((turn === 'w') === (p === p.toUpperCase()))) {
+      legalTargets = getLegalMoves(r, c);
+      selectedSq = sqName;
+      renderBoard();
+      return;
+    }
+
+    // Invalid click → deselect
+    selectedSq = null; legalTargets = []; renderBoard();
+    return;
+  }
+
+  // Nothing selected yet — select a friendly piece with legal moves
+  const p = board[r][c];
+  if (!p) return;
+  if ((turn === 'w') !== (p === p.toUpperCase())) return;
+  legalTargets = getLegalMoves(r, c);
+  if (!legalTargets.length) return;
+  selectedSq = sqName;
+  renderBoard();
+}
+
+// ════════════════════════════════════════════
+//  UI UPDATES
+// ════════════════════════════════════════════
+
+function updateTurnIndicator() {
+  document.getElementById('turnPiece').textContent = turn === 'w' ? '♙' : '♟';
+  document.getElementById('turnText').textContent  = turn === 'w' ? 'White to move' : 'Black to move';
+}
+
+function updateMoveLog() {
+  const log = document.getElementById('movesLog');
+  if (!moveHistory.length) {
+    log.innerHTML = '<div style="color:var(--text-dim)">No moves yet.</div>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < moveHistory.length; i += 2) {
+    const num = Math.floor(i/2) + 1;
+    const w = moveHistory[i]   || '';
+    const b = moveHistory[i+1] || '';
+    html += `<div class="move-pair">
+      <span class="move-num">${num}.</span>
+      <span class="move-w">${w}</span>
+      <span class="move-b">${b}</span>
+    </div>`;
+  }
+  log.innerHTML = html;
+  log.scrollTop = log.scrollHeight;
+}
+
+// ════════════════════════════════════════════
+//  CONTROLS
+// ════════════════════════════════════════════
+
+function resetBoard() {
+  parseFEN(STARTING_FEN);
+  moveHistory = [];
+  lastMove = null;
+  bestMove = null;
+  selectedSq = null;
+  updateMoveLog();
+  updateTurnIndicator();
+  renderBoard();
+  document.getElementById('bestMoveDisplay').innerHTML =
+    '<div style="color:var(--text-dim); font-size:0.75rem">Waiting for position...</div>';
+  updateMaterialDisplay();
+  if (engineReady) setTimeout(analyzePosition, 400);
+  serialLog('Board reset to starting position.');
+}
+
+function undoMove() {
+  if (!moveHistory.length) return;
+  // Replay from start
+  const hist = [...moveHistory];
+  hist.pop();
+  parseFEN(STARTING_FEN);
+  lastMove = null;
+  for (const m of hist) applyMove(m);
+  moveHistory = hist;
+  bestMove = null;
+  updateMoveLog();
+  updateTurnIndicator();
+  renderBoard();
+  updateMaterialDisplay();
+  if (engineReady) setTimeout(analyzePosition, 300);
+}
+
+function copyFEN() {
+  const fen = buildFEN();
+  navigator.clipboard.writeText(fen).then(() => {
+    serialLog('FEN copied: ' + fen);
+  });
+}
+
+function loadFEN() {
+  const fen = prompt('Enter FEN string:', buildFEN());
+  if (!fen) return;
+  try {
+    parseFEN(fen);
+    moveHistory = [];
+    lastMove = null;
+    bestMove = null;
+    updateMoveLog();
+    updateTurnIndicator();
+    renderBoard();
+    if (engineReady) setTimeout(analyzePosition, 300);
+  } catch(e) {
+    alert('Invalid FEN: ' + e.message);
+  }
+}
+
+// ════════════════════════════════════════════
+//  WEB SERIAL (Arduino)
+// ════════════════════════════════════════════
+
+async function connectSerial() {
+  if (!('serial' in navigator)) {
+    serialLog('❌ Web Serial not supported. Use Chrome/Edge.');
+    return;
+  }
+  try {
+    serialPort = await navigator.serial.requestPort();
+    await serialPort.open({ baudRate: 115200 });
+
+    const dot  = document.getElementById('serialDot');
+    const stat = document.getElementById('serialStatus');
+    dot.className  = 'dot green';
+    stat.textContent = 'Serial: connected';
+    serialLog('✅ Arduino connected at 115200 baud.');
+
+    document.getElementById('serialConnectBtn').disabled = true;
+    document.getElementById('serialConnectBtn').textContent = '✓ Connected';
+
+    // Set up writer
+    serialWriter = serialPort.writable.getWriter();
+
+    // Start reading board state from Arduino
+    readSerial();
+  } catch(e) {
+    serialLog('⚠ ' + e.message);
+  }
+}
+
+async function readSerial() {
+  const reader = serialPort.readable.getReader();
+  let buffer = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += new TextDecoder().decode(value);
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) processArduinoMessage(line.trim());
+    }
+  } catch(e) {
+    serialLog('Serial read error: ' + e.message);
+  }
+}
+
+function processArduinoMessage(msg) {
+  if (!msg) return;
+  serialLog('← ' + msg);
+
+  // Expected format from Arduino: "BOARD:rnbqkbnr/pppppppp/..."
+  if (msg.startsWith('BOARD:')) {
+    const fen = msg.slice(6) + ' ' + turn + ' ' + castling + ' ' + enPassant + ' ' + halfMove + ' ' + fullMove;
+    try {
+      parseFEN(fen);
+      renderBoard();
+      updateTurnIndicator();
+      if (engineReady) analyzePosition();
+    } catch(e) {}
+  }
+
+  // "MOVE:e2e4" — piece physically moved
+  if (msg.startsWith('MOVE:')) {
+    const uci = msg.slice(5);
+    if (applyMove(uci)) {
+      updateMoveLog();
+      updateTurnIndicator();
+      renderBoard();
+      bestMove = null;
+      checkGameEnd();
+      if (engineReady) setTimeout(analyzePosition, 300);
+    }
+  }
+}
+
+async function sendToArduino(data) {
+  if (!serialWriter) return;
+  try {
+    const encoded = new TextEncoder().encode(data + '\n');
+    await serialWriter.write(encoded);
+    serialLog('→ ' + data);
+  } catch(e) {
+    serialLog('Write error: ' + e.message);
+  }
+}
+
+function sendLEDCommand(uci) {
+  // LED:e2:e4  — tell Arduino to light from=green, to=blue
+  const from = uci.slice(0,2);
+  const to   = uci.slice(2,4);
+  sendToArduino(`LED:${from}:${to}`);
+}
+
+function sendBoardStateToArduino() {
+  sendToArduino('FEN:' + buildFEN());
+}
+
+function serialLog(msg) {
+  const log = document.getElementById('serialLog');
+  const div = document.createElement('div');
+  div.textContent = msg;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════
+
+parseFEN(STARTING_FEN);
+renderFileLabels();
+renderBoard();
+updateTurnIndicator();
+updateMoveLog();
+updateMaterialDisplay();
+loadStockfish();
+</script>
+</body>
+</html>
